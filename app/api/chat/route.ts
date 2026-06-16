@@ -46,8 +46,11 @@ export async function POST(req: NextRequest) {
           const lawText = await getLawTextByName(lawNames[0]);
           const truncated = lawText.substring(0, 15000);
           lawContext = `\n\n[${lawNames[0]} 법령 본문 (일부)]\n${truncated}`;
+        } else {
+          console.log(`법령 검색 결과 없음: ${lawNames[0]}`);
         }
-      } catch {
+      } catch (e) {
+        console.error(`법령 API 오류: ${e}`);
         lawContext = "";
       }
     }

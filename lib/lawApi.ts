@@ -1,5 +1,5 @@
 const LAW_BASE_URL = "https://www.law.go.kr/DRF";
-const OC = process.env.LAW_API_OC || "hohoaya@gmail.com";
+const OC = process.env.LAW_API_OC || "lawcheck";
 
 export interface LawSearchResult {
   법령명: string;
