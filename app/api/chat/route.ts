@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { classifyCategory, CATEGORY_LABELS, ENFORCEMENT_DECREE_MAP, LawCategory } from "@/lib/classifier";
 import { searchLaw, getLawTextByName } from "@/lib/lawApi";
 import { getRelevantKnowledge } from "@/lib/qaKnowledge";
+import { getDispositionData } from "@/lib/dispositionData";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -58,7 +59,8 @@ export async function POST(req: NextRequest) {
       ? `\n\n[분류된 법령 카테고리: ${categoryLabel}]`
       : "";
 
-    const fullSystem = SYSTEM_PROMPT + contextNote + qaKnowledge + lawContext;
+    const dispositionContext = category !== "unknown" ? getDispositionData(category) : "";
+    const fullSystem = SYSTEM_PROMPT + contextNote + dispositionContext + qaKnowledge + lawContext;
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
