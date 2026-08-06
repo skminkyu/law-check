@@ -13,7 +13,7 @@ interface Message {
   id?: string;
 }
 
-type TabType = "chat" | "history";
+type TabType = "chat" | "history" | "broadcast";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>("chat");
@@ -30,6 +30,19 @@ export default function Home() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [historyItems, setHistoryItems] = useState<{ id: number; category: string; question: string; answer: string; created_at: string }[]>([]);
+
+  // Broadcast cases state
+  const [broadcastCases, setBroadcastCases] = useState<{ program: string; violation: string; regulation: string; decision: string; source?: string }[]>([]);
+  const [broadcastLoading, setBroadcastLoading] = useState(false);
+  const [broadcastSearch, setBroadcastSearch] = useState("");
+  const [broadcastDecision, setBroadcastDecision] = useState("all");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState({ program: "", violation: "", regulation: "", decision: "권고" });
+  const [addLoading, setAddLoading] = useState(false);
+  const [showPredict, setShowPredict] = useState(false);
+  const [predictInput, setPredictInput] = useState("");
+  const [predictResult, setPredictResult] = useState("");
+  const [predictLoading, setPredictLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
   const [historyCategory, setHistoryCategory] = useState<string>("all");
@@ -121,7 +134,62 @@ export default function Home() {
 
   useEffect(() => {
     if (activeTab === "history") loadHistory();
+    if (activeTab === "broadcast") loadBroadcastCases();
   }, [activeTab, historyCategory]);
+
+  async function loadBroadcastCases() {
+    setBroadcastLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (broadcastSearch) params.set("q", broadcastSearch);
+      if (broadcastDecision !== "all") params.set("decision", broadcastDecision);
+      const res = await fetch(`/api/broadcast-cases?${params}`);
+      const data = await res.json();
+      setBroadcastCases(data.cases || []);
+    } catch {
+      setBroadcastCases([]);
+    } finally {
+      setBroadcastLoading(false);
+    }
+  }
+
+  async function addBroadcastCase() {
+    if (!addForm.program || !addForm.violation || !addForm.regulation || !addForm.decision) return;
+    setAddLoading(true);
+    try {
+      await fetch("/api/broadcast-cases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(addForm),
+      });
+      setAddForm({ program: "", violation: "", regulation: "", decision: "권고" });
+      setShowAddForm(false);
+      loadBroadcastCases();
+    } catch {
+      alert("저장 실패");
+    } finally {
+      setAddLoading(false);
+    }
+  }
+
+  async function predictDecision() {
+    if (!predictInput.trim()) return;
+    setPredictLoading(true);
+    setPredictResult("");
+    try {
+      const res = await fetch("/api/broadcast-predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ violation: predictInput }),
+      });
+      const data = await res.json();
+      setPredictResult(data.analysis || data.error || "분석 실패");
+    } catch {
+      setPredictResult("네트워크 오류");
+    } finally {
+      setPredictLoading(false);
+    }
+  }
 
   const getLastUserMessage = (idx: number): string => {
     for (let i = idx - 1; i >= 0; i--) {
@@ -153,6 +221,12 @@ export default function Home() {
               className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${activeTab === "history" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
             >
               📚 사례 DB
+            </button>
+            <button
+              onClick={() => setActiveTab("broadcast")}
+              className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${activeTab === "broadcast" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              📺 방송심의
             </button>
           </div>
         </div>
@@ -276,6 +350,162 @@ export default function Home() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Broadcast Tab */}
+      {activeTab === "broadcast" && (
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          <div className="max-w-3xl mx-auto space-y-4">
+            {/* Predict panel */}
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-semibold text-indigo-800">🔮 의결 예측</h2>
+                <button onClick={() => setShowPredict(!showPredict)} className="text-xs text-indigo-600 hover:text-indigo-800">
+                  {showPredict ? "닫기" : "위반내용 입력하여 예측"}
+                </button>
+              </div>
+              {showPredict && (
+                <div className="space-y-2">
+                  <textarea
+                    value={predictInput}
+                    onChange={(e) => setPredictInput(e.target.value)}
+                    placeholder="위반 내용을 입력하세요. 예: 쇼호스트가 건강기능식품을 소개하면서 의약품 수준의 효능을 암시하는 표현을 사용하였고..."
+                    rows={4}
+                    className="w-full border border-indigo-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  />
+                  <button
+                    onClick={predictDecision}
+                    disabled={!predictInput.trim() || predictLoading}
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-40"
+                  >
+                    {predictLoading ? "분석 중..." : "예측 분석"}
+                  </button>
+                  {predictResult && (
+                    <div className="bg-white border border-indigo-200 rounded-lg p-3 mt-2 prose prose-sm max-w-none [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-gray-200 [&_th]:bg-gray-50 [&_th]:p-2 [&_td]:border [&_td]:border-gray-200 [&_td]:p-2 text-gray-800">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{predictResult}</ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Search & filter */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={broadcastSearch}
+                onChange={(e) => setBroadcastSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") loadBroadcastCases(); }}
+                placeholder="방송사, 위반내용, 규정 검색..."
+                className="flex-1 border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <select
+                value={broadcastDecision}
+                onChange={(e) => { setBroadcastDecision(e.target.value); }}
+                className="border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              >
+                <option value="all">전체 의결</option>
+                {["문제없음", "의견제시", "권고", "주의", "의견진술", "경고"].map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+              <button onClick={loadBroadcastCases} className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700">검색</button>
+            </div>
+
+            {/* Add case button */}
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500">총 {broadcastCases.length}건</p>
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="text-xs bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700"
+              >
+                + 사례 추가
+              </button>
+            </div>
+
+            {/* Add form */}
+            {showAddForm && (
+              <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+                <h3 className="text-sm font-semibold text-gray-800">새 심의 사례 추가</h3>
+                <input
+                  placeholder="프로그램명 (방송사 + 프로그램명)"
+                  value={addForm.program}
+                  onChange={(e) => setAddForm({ ...addForm, program: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <textarea
+                  placeholder="주요 위반내용"
+                  value={addForm.violation}
+                  onChange={(e) => setAddForm({ ...addForm, violation: e.target.value })}
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <input
+                  placeholder="관련 규정 (예: 제5조(일반원칙) 제3항)"
+                  value={addForm.regulation}
+                  onChange={(e) => setAddForm({ ...addForm, regulation: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <select
+                  value={addForm.decision}
+                  onChange={(e) => setAddForm({ ...addForm, decision: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                >
+                  {["문제없음", "의견제시", "권고", "주의", "의견진술", "경고", "과태료", "과징금"].map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+                <div className="flex gap-2">
+                  <button onClick={addBroadcastCase} disabled={addLoading}
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-40">
+                    {addLoading ? "저장 중..." : "저장"}
+                  </button>
+                  <button onClick={() => setShowAddForm(false)} className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">취소</button>
+                </div>
+              </div>
+            )}
+
+            {/* Cases list */}
+            {broadcastLoading ? (
+              <div className="text-center py-12 text-gray-400 text-sm">불러오는 중...</div>
+            ) : broadcastCases.length === 0 ? (
+              <div className="text-center py-12 text-gray-400 text-sm">검색 결과가 없습니다.</div>
+            ) : (
+              <div className="space-y-3">
+                {broadcastCases.map((c, i) => {
+                  const decisionColor: Record<string, string> = {
+                    "문제없음": "bg-green-100 text-green-700",
+                    "의견제시": "bg-blue-100 text-blue-700",
+                    "권고": "bg-yellow-100 text-yellow-700",
+                    "주의": "bg-orange-100 text-orange-700",
+                    "의견진술": "bg-red-100 text-red-700",
+                    "경고": "bg-red-200 text-red-800",
+                  };
+                  return (
+                    <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <p className="text-sm font-medium text-gray-800">{c.program}</p>
+                        <div className="flex gap-1.5 shrink-0">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${decisionColor[c.decision] || "bg-gray-100 text-gray-600"}`}>
+                            {c.decision}
+                          </span>
+                          {c.source === "user" && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">직접입력</span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs text-indigo-600 font-medium mb-1">{c.regulation}</p>
+                      <details className="cursor-pointer">
+                        <summary className="text-xs text-gray-500 hover:text-gray-700">위반 내용 보기</summary>
+                        <p className="mt-2 text-xs text-gray-600 leading-relaxed">{c.violation}</p>
+                      </details>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* History Tab */}
