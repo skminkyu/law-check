@@ -4,6 +4,7 @@ import { classifyCategory, CATEGORY_LABELS, ENFORCEMENT_DECREE_MAP, LawCategory 
 import { searchLaw, getLawTextByName } from "@/lib/lawApi";
 import { getRelevantKnowledge } from "@/lib/qaKnowledge";
 import { getDispositionData } from "@/lib/dispositionData";
+import { getBroadcastCaseSummary } from "@/lib/broadcastCasesData";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -67,7 +68,8 @@ export async function POST(req: NextRequest) {
       : "";
 
     const dispositionContext = category !== "unknown" ? getDispositionData(category) : "";
-    const fullSystem = SYSTEM_PROMPT + contextNote + dispositionContext + qaKnowledge + lawContext;
+    const broadcastContext = category === "방송심의" ? getBroadcastCaseSummary() : "";
+    const fullSystem = SYSTEM_PROMPT + contextNote + dispositionContext + broadcastContext + qaKnowledge + lawContext;
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
