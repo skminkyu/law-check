@@ -32,7 +32,7 @@ export default function Home() {
   const [historyItems, setHistoryItems] = useState<{ id: number; category: string; question: string; answer: string; created_at: string }[]>([]);
 
   // Broadcast cases state
-  const [broadcastCases, setBroadcastCases] = useState<{ program: string; violation: string; regulation: string; decision: string; source?: string }[]>([]);
+  const [broadcastCases, setBroadcastCases] = useState<{ program: string; broadcast_date?: string; violation: string; regulation: string; decision: string; source?: string }[]>([]);
   const [broadcastLoading, setBroadcastLoading] = useState(false);
   const [broadcastSearch, setBroadcastSearch] = useState("");
   const [broadcastDecision, setBroadcastDecision] = useState("all");
@@ -484,7 +484,10 @@ export default function Home() {
                   return (
                     <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <p className="text-sm font-medium text-gray-800">{c.program}</p>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">{c.program}</p>
+                          {c.broadcast_date && <p className="text-xs text-gray-400 mt-0.5">{c.broadcast_date}</p>}
+                        </div>
                         <div className="flex gap-1.5 shrink-0">
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${decisionColor[c.decision] || "bg-gray-100 text-gray-600"}`}>
                             {c.decision}
