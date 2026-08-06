@@ -5,6 +5,7 @@ export type LawCategory =
   | "식품위생"
   | "의약외품"
   | "의료기기"
+  | "방송심의"
   | "unknown";
 
 export const CATEGORIES: { id: LawCategory; label: string; emoji: string; color: string }[] = [
@@ -14,6 +15,7 @@ export const CATEGORIES: { id: LawCategory; label: string; emoji: string; color:
   { id: "식품위생", label: "식품위생", emoji: "🍽️", color: "bg-lime-50 border-lime-200 text-lime-700 hover:bg-lime-100" },
   { id: "의약외품", label: "의약외품", emoji: "🧴", color: "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100" },
   { id: "의료기기", label: "의료기기", emoji: "🏥", color: "bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100" },
+  { id: "방송심의", label: "방송심의", emoji: "📺", color: "bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100" },
 ];
 
 export function classifyCategory(question: string): LawCategory {
@@ -24,6 +26,7 @@ export function classifyCategory(question: string): LawCategory {
   if (/건강기능식품|건기식/.test(q)) return "건강기능식품";
   if (/식품.*표시.*광고|표시.*광고.*식품|표시광고/.test(q)) return "식품표시광고";
   if (/식품위생|식품|음식|음료|주류/.test(q)) return "식품위생";
+  if (/방송심의|방송광고심의|방송법|방송광고|방송프로그램|방송위반|방송과징금|방송과태료|방송미디어|방통위/.test(q)) return "방송심의";
   return "unknown";
 }
 
@@ -34,6 +37,7 @@ export const CATEGORY_LABELS: Record<LawCategory, string> = {
   식품위생: "식품위생법",
   의약외품: "약사법(의약외품)",
   의료기기: "의료기기법",
+  방송심의: "방송법·방송심의에 관한 규정",
   unknown: "해당 법령 없음",
 };
 
@@ -44,6 +48,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   식품위생: "bg-lime-100 text-lime-700",
   의약외품: "bg-blue-100 text-blue-700",
   의료기기: "bg-purple-100 text-purple-700",
+  방송심의: "bg-orange-100 text-orange-700",
   unknown: "bg-gray-100 text-gray-600",
 };
 
@@ -55,6 +60,7 @@ export const ENFORCEMENT_DECREE_MAP: Record<LawCategory, string[]> = {
   식품위생: ["식품위생법 시행규칙"],
   의약외품: ["약사법 시행규칙"],
   의료기기: ["의료기기법 시행규칙"],
+  방송심의: ["방송법"],
   unknown: [],
 };
 
@@ -102,6 +108,13 @@ export const EXAMPLE_QUESTIONS: Record<LawCategory | "all", string[]> = {
     "의료기기 표시 위반 행정처분은?",
     "의료기기 광고 위반 처분 기준은?",
     "의료기기 제조업 허가 없이 제조 시?",
+  ],
+  방송심의: [
+    "방송광고 허위·과장 광고 행정처분은?",
+    "방송프로그램 심의 위반 제재 기준은?",
+    "방송법 위반 과징금 부과 기준은?",
+    "방송광고 품위 위반 제재 절차는?",
+    "방송법 위반 과태료 부과 세부기준은?",
   ],
   unknown: [],
 };
