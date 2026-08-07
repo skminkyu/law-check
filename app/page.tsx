@@ -145,6 +145,21 @@ export default function Home() {
     }
   }
 
+  function deleteLocalQA(id: string | number) {
+    try {
+      const existing = getLocalQA();
+      localStorage.setItem(LOCAL_QA_KEY, JSON.stringify(existing.filter((i: { id: string | number }) => i.id !== id)));
+    } catch { /* storage unavailable */ }
+  }
+
+  async function deleteHistory(id: string | number) {
+    deleteLocalQA(id);
+    try {
+      await fetch(`/api/save-qa?id=${id}`, { method: "DELETE" });
+    } catch { /* ignore API errors */ }
+    setHistoryItems((prev) => prev.filter((i) => i.id !== id));
+  }
+
   async function loadHistory() {
     setHistoryLoading(true);
     try {
@@ -274,7 +289,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col bg-gray-50" style={{ height: "100dvh" }}>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
@@ -456,7 +471,7 @@ export default function Home() {
                     {predictLoading ? "분석 중..." : "예측 분석"}
                   </button>
                   {predictResult && (
-                    <div className="bg-white border border-indigo-200 rounded-lg p-3 mt-2 prose prose-sm max-w-none [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-gray-200 [&_th]:bg-gray-50 [&_th]:p-2 [&_td]:border [&_td]:border-gray-200 [&_td]:p-2 text-gray-800">
+                    <div className="bg-white border border-indigo-200 rounded-lg p-3 mt-2 prose prose-sm max-w-none [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-gray-200 [&_th]:bg-gray-50 [&_th]:p-2 [&_td]:border [&_td]:border-gray-200 [&_td]:p-2 text-gray-800 overflow-visible">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{predictResult}</ReactMarkdown>
                     </div>
                   )}
@@ -635,6 +650,12 @@ export default function Home() {
                         {CATEGORY_LABELS[item.category as LawCategory] || item.category}
                       </span>
                       <span className="text-xs text-gray-400">{new Date(item.created_at).toLocaleDateString("ko-KR")}</span>
+                      <button
+                        onClick={() => deleteHistory(item.id)}
+                        className="ml-auto text-xs text-red-400 hover:text-red-600 px-2 py-0.5 rounded hover:bg-red-50 transition-colors"
+                      >
+                        삭제
+                      </button>
                     </div>
                     <p className="text-sm font-medium text-gray-800 mb-2">Q. {item.question}</p>
                     <details className="cursor-pointer">
