@@ -95,10 +95,34 @@ export default function Home() {
     }
   }
 
+  const LOCAL_QA_KEY = "userQAHistory";
+
+  function getLocalQA() {
+    try {
+      return JSON.parse(localStorage.getItem(LOCAL_QA_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  }
+
+  function saveLocalQA(item: { category: string; question: string; answer: string; id: string }) {
+    try {
+      const existing = getLocalQA();
+      localStorage.setItem(LOCAL_QA_KEY, JSON.stringify([item, ...existing]));
+    } catch { /* storage unavailable */ }
+  }
+
   async function saveMessage(msg: Message, question: string) {
     if (!msg.id || savedIds.has(msg.id)) return;
     setSavingId(msg.id);
     try {
+      const localItem = {
+        id: msg.id,
+        category: msg.category || "unknown",
+        question,
+        answer: msg.content,
+      };
+      saveLocalQA(localItem);
       await fetch("/api/save-qa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -110,7 +134,7 @@ export default function Home() {
       });
       setSavedIds((prev) => new Set([...prev, msg.id!]));
     } catch {
-      alert("저장 실패");
+      setSavedIds((prev) => new Set([...prev, msg.id!]));
     } finally {
       setSavingId(null);
     }
@@ -124,9 +148,20 @@ export default function Home() {
       if (historyCategory !== "all") params.set("category", historyCategory);
       const res = await fetch(`/api/search-qa?${params}`);
       const data = await res.json();
-      setHistoryItems(data.results || []);
+      const apiResults: typeof historyItems = data.results || [];
+
+      const localItems: typeof historyItems = getLocalQA();
+      const q = (historySearch || "").toLowerCase();
+      const extra = localItems.filter((lc) => {
+        if (apiResults.some((ar) => ar.id === lc.id)) return false;
+        if (historyCategory !== "all" && lc.category !== historyCategory) return false;
+        if (q && !lc.question?.toLowerCase().includes(q) && !lc.answer?.toLowerCase().includes(q)) return false;
+        return true;
+      });
+
+      setHistoryItems([...apiResults, ...extra]);
     } catch {
-      setHistoryItems([]);
+      setHistoryItems(getLocalQA());
     } finally {
       setHistoryLoading(false);
     }
