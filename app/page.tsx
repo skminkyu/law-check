@@ -137,6 +137,24 @@ export default function Home() {
     if (activeTab === "broadcast") loadBroadcastCases();
   }, [activeTab, historyCategory]);
 
+  const LOCAL_CASES_KEY = "userBroadcastCases";
+
+  function getLocalCases() {
+    try {
+      return JSON.parse(localStorage.getItem(LOCAL_CASES_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  }
+
+  function saveLocalCase(c: { program: string; violation: string; regulation: string; decision: string }) {
+    try {
+      const existing: typeof broadcastCases = getLocalCases();
+      const newCase = { ...c, source: "user" as const, id: `local_${Date.now()}` };
+      localStorage.setItem(LOCAL_CASES_KEY, JSON.stringify([newCase, ...existing]));
+    } catch { /* storage unavailable */ }
+  }
+
   async function loadBroadcastCases() {
     setBroadcastLoading(true);
     try {
@@ -145,9 +163,24 @@ export default function Home() {
       if (broadcastDecision !== "all") params.set("decision", broadcastDecision);
       const res = await fetch(`/api/broadcast-cases?${params}`);
       const data = await res.json();
-      setBroadcastCases(data.cases || []);
+      const apiCases: typeof broadcastCases = data.cases || [];
+
+      // Merge localStorage cases, skipping duplicates already returned by API
+      const localCases: typeof broadcastCases = getLocalCases();
+      const extra = localCases.filter(
+        (lc) => !apiCases.some((ac) => ac.program === lc.program && ac.violation === lc.violation)
+      );
+      const q = (broadcastSearch || "").toLowerCase();
+      const filtered = extra.filter((c) => {
+        if (q && !c.violation.toLowerCase().includes(q) && !c.program.toLowerCase().includes(q) && !c.regulation.toLowerCase().includes(q)) return false;
+        if (broadcastDecision !== "all" && c.decision !== broadcastDecision) return false;
+        return true;
+      });
+
+      setBroadcastCases([...apiCases, ...filtered]);
     } catch {
-      setBroadcastCases([]);
+      // API 실패 시 localStorage만으로 표시
+      setBroadcastCases(getLocalCases());
     } finally {
       setBroadcastLoading(false);
     }
@@ -157,6 +190,8 @@ export default function Home() {
     if (!addForm.program || !addForm.violation || !addForm.regulation || !addForm.decision) return;
     setAddLoading(true);
     try {
+      // localStorage에 먼저 저장 (Supabase 성패와 무관하게 보존)
+      saveLocalCase(addForm);
       await fetch("/api/broadcast-cases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
