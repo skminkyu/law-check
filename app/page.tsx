@@ -105,7 +105,7 @@ export default function Home() {
     }
   }
 
-  function saveLocalQA(item: { category: string; question: string; answer: string; id: string }) {
+  function saveLocalQA(item: { category: string; question: string; answer: string; id: string; created_at: string }) {
     try {
       const existing = getLocalQA();
       localStorage.setItem(LOCAL_QA_KEY, JSON.stringify([item, ...existing]));
@@ -121,9 +121,11 @@ export default function Home() {
         category: msg.category || "unknown",
         question,
         answer: msg.content,
+        created_at: new Date().toISOString(),
       };
       saveLocalQA(localItem);
-      await fetch("/api/save-qa", {
+
+      const res = await fetch("/api/save-qa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -132,6 +134,9 @@ export default function Home() {
           answer: msg.content,
         }),
       });
+      if (!res.ok) {
+        console.warn("Supabase 저장 실패, localStorage에만 저장됨");
+      }
       setSavedIds((prev) => new Set([...prev, msg.id!]));
     } catch {
       setSavedIds((prev) => new Set([...prev, msg.id!]));
