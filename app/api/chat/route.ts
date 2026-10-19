@@ -5,18 +5,21 @@ import { searchLaw, getLawTextByName } from "@/lib/lawApi";
 import { getRelevantKnowledge } from "@/lib/qaKnowledge";
 import { getDispositionData } from "@/lib/dispositionData";
 import { getBroadcastCaseSummary } from "@/lib/broadcastCasesData";
+import { searchFaq, formatFaqContext } from "@/lib/faqSearch";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const SYSTEM_PROMPT = `당신은 SK스토아 품질관리팀(QA)의 법규 자문 챗봇입니다.
-다음 두 가지 지식을 활용해 답변합니다:
+다음 세 가지 지식을 활용해 답변합니다:
 1. SK스토아 QA 가이드북 내용 (서류QA 기준, 표시 기준, QA 업무 절차 등)
 2. 국가 법령 데이터 (행정처분 기준, 관련 법령 조문)
+3. 식품의약품안전처 자주하는 질문집 (연도별 Q&A)
 
 답변 원칙:
 - SK스토아 QA 가이드북 내용이 제공된 경우, 해당 내용을 우선적으로 활용해 답변하세요.
 - 행정처분 기준 질문에는 반드시 1차·2차·3차 처분을 표로 정리하세요.
 - 서류 기준, 표시 기준, QA 절차 질문에는 가이드북 내용을 구체적으로 인용하세요.
+- 자주하는 질문집 내용을 활용할 경우, 반드시 "출처: 자주하는 질문집 [연도]년 [분야]" 형식으로 출처를 명시하세요.
 - 항상 한국어로 답변하세요.
 
 ⚠️ 조문 내용 답변 원칙 (최우선 준수):
@@ -69,7 +72,12 @@ export async function POST(req: NextRequest) {
 
     const dispositionContext = category !== "unknown" ? getDispositionData(category) : "";
     const broadcastContext = category === "방송심의" ? getBroadcastCaseSummary() : "";
-    const fullSystem = SYSTEM_PROMPT + contextNote + dispositionContext + broadcastContext + qaKnowledge + lawContext;
+
+    // FAQ 자주하는 질문집 검색
+    const faqEntries = searchFaq(lastMessage, 3);
+    const faqContext = formatFaqContext(faqEntries);
+
+    const fullSystem = SYSTEM_PROMPT + contextNote + dispositionContext + broadcastContext + qaKnowledge + faqContext + lawContext;
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
