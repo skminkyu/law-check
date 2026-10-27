@@ -1,4 +1,4 @@
-import faqData from "@/lib/faqData.json";
+import faqData from "./faqData.json";
 
 export interface FaqEntry {
   id: string;
