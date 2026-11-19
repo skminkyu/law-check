@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 import { classifyCategory, CATEGORY_LABELS, ENFORCEMENT_DECREE_MAP, LawCategory } from "@/lib/classifier";
 import { searchLaw, getLawTextByName } from "@/lib/lawApi";
 import { getRelevantKnowledge } from "@/lib/qaKnowledge";
@@ -7,36 +7,7 @@ import { getDispositionData } from "@/lib/dispositionData";
 import { getBroadcastCaseSummary } from "@/lib/broadcastCasesData";
 import { searchFaq, formatFaqContext } from "@/lib/faqSearch";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-
-// 사용 가능한 모델을 순서대로 시도 (최신 → 안정)
-const GEMINI_MODELS = [
-  "gemini-2.5-flash-lite",
-  "gemini-2.5-flash",
-  "gemini-2.0-flash-lite",
-  "gemini-1.5-flash-latest",
-  "gemini-1.5-flash-002",
-];
-
-async function generateWithFallback(systemInstruction: string, history: {role: string; parts: {text: string}[]}[], message: string): Promise<string> {
-  for (const modelName of GEMINI_MODELS) {
-    try {
-      const model = genAI.getGenerativeModel({ model: modelName, systemInstruction });
-      const chat = model.startChat({ history });
-      const result = await chat.sendMessage(message);
-      return result.response.text();
-    } catch (e: unknown) {
-      const status = (e as {status?: number}).status;
-      // 404(모델 없음) 또는 503(과부하)이면 다음 모델 시도
-      if (status === 404 || status === 503) {
-        console.warn(`Model ${modelName} unavailable (${status}), trying next...`);
-        continue;
-      }
-      throw e;
-    }
-  }
-  throw new Error("모든 Gemini 모델을 사용할 수 없습니다.");
-}
+const getGroq = () => new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
 
 const SYSTEM_PROMPT = `당신은 SK스토아 품질관리팀(QA)의 법규 자문 챗봇입니다.
 다음 세 가지 지식을 활용해 답변합니다:
@@ -108,16 +79,21 @@ export async function POST(req: NextRequest) {
 
     const fullSystem = SYSTEM_PROMPT + contextNote + dispositionContext + broadcastContext + qaKnowledge + faqContext + lawContext;
 
-    // Gemini는 user/model 역할 사용, 반드시 user로 시작해야 함
-    const allMessages = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
+    const chatMessages = messages.map((m: { role: string; content: string }) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
     }));
-    while (allMessages.length > 0 && allMessages[0].role === "model") {
-      allMessages.shift();
-    }
 
-    const assistantMessage = await generateWithFallback(fullSystem, allMessages, lastMessage);
+    const response = await getGroq().chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: fullSystem },
+        ...chatMessages,
+      ],
+      max_tokens: 2048,
+    });
+
+    const assistantMessage = response.choices[0]?.message?.content || "";
 
     return NextResponse.json({ message: assistantMessage, category, categoryLabel });
   } catch (error) {
