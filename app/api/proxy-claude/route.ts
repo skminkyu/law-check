@@ -12,7 +12,7 @@ export async function OPTIONS() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { apiKey, prompt, model = "claude-sonnet-4-6", max_tokens = 2048 } = await req.json();
+    const { apiKey, prompt, max_tokens = 1200 } = await req.json();
 
     if (!apiKey || !prompt) {
       return NextResponse.json(
@@ -21,15 +21,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model,
+        model: "llama-3.3-70b-versatile",
         max_tokens,
         messages: [{ role: "user", content: prompt }],
       }),
