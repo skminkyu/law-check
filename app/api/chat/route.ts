@@ -84,14 +84,37 @@ export async function POST(req: NextRequest) {
       content: m.content,
     }));
 
-    const response = await getGroq().chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        { role: "system", content: fullSystem },
-        ...chatMessages,
-      ],
-      max_tokens: 2048,
-    });
+    const GROQ_MODELS = [
+      "llama3-70b-8192",
+      "llama3-8b-8192",
+      "llama-3.1-70b-versatile",
+      "llama-3.1-8b-instant",
+      "mixtral-8x7b-32768",
+      "gemma2-9b-it",
+    ];
+
+    let response = null;
+    for (const modelName of GROQ_MODELS) {
+      try {
+        response = await getGroq().chat.completions.create({
+          model: modelName,
+          messages: [
+            { role: "system", content: fullSystem },
+            ...chatMessages,
+          ],
+          max_tokens: 2048,
+        });
+        break;
+      } catch (e: unknown) {
+        const status = (e as { status?: number }).status;
+        if (status === 404) {
+          console.warn(`Groq model ${modelName} not found, trying next...`);
+          continue;
+        }
+        throw e;
+      }
+    }
+    if (!response) throw new Error("사용 가능한 Groq 모델이 없습니다.");
 
     const assistantMessage = response.choices[0]?.message?.content || "";
 
