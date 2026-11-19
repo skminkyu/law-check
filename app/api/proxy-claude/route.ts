@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        model: "openai/gpt-oss-20b",
         max_tokens,
         messages: [{ role: "user", content: prompt }],
       }),
