@@ -77,44 +77,51 @@ export async function POST(req: NextRequest) {
     const faqEntries = searchFaq(lastMessage, 3);
     const faqContext = formatFaqContext(faqEntries);
 
-    // 토큰 절약: 컨텍스트를 합산 후 4000자로 제한 (lawContext 제외 우선)
-    const contextParts = contextNote + dispositionContext + broadcastContext + qaKnowledge + faqContext;
-    const truncatedContext = contextParts.length > 4000 ? contextParts.substring(0, 4000) + "\n...(생략)" : contextParts;
-    const fullSystem = SYSTEM_PROMPT + truncatedContext;
-
     const chatMessages = messages.map((m: { role: string; content: string }) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
     }));
 
-    // 검증된 Groq 채팅 모델만 사용 (20K TPM 이상, free tier)
-    const GROQ_CHAT_MODELS = [
-      "llama-3.1-8b-instant",
-      "llama-3.1-70b-versatile",
-      "llama-3.3-70b-specdec",
-      "gemma2-9b-it",
-    ];
-
     const groqClient = getGroq();
+
+    // 실제 사용 가능한 모델 조회 후 채팅 가능 모델만 필터링
+    const modelList = await groqClient.models.list();
+    const NON_CHAT = ["guard", "embed", "rerank", "whisper", "tts", "vision"];
+    const chatModels = modelList.data
+      .map((m: { id: string }) => m.id)
+      .filter((id: string) => !NON_CHAT.some((kw) => id.toLowerCase().includes(kw)));
+
+    if (chatModels.length === 0) throw new Error("사용 가능한 Groq 채팅 모델이 없습니다.");
+
+    // 컨텍스트를 점진적으로 줄이면서 시도
+    const contextParts = contextNote + dispositionContext + broadcastContext + qaKnowledge + faqContext;
+    const contextLimits = [3000, 1500, 500];
+
     let response = null;
-    for (const modelName of GROQ_CHAT_MODELS) {
-      try {
-        response = await groqClient.chat.completions.create({
-          model: modelName,
-          messages: [
-            { role: "system", content: fullSystem },
-            ...chatMessages,
-          ],
-          max_tokens: 1024,
-        });
-        break;
-      } catch (e: unknown) {
-        const status = (e as { status?: number }).status;
-        if (status === 404 || status === 400 || status === 413) {
-          console.warn(`Groq model ${modelName} unavailable (${status}), trying next...`);
-          continue;
+    outer: for (const limit of contextLimits) {
+      const truncated = contextParts.length > limit ? contextParts.substring(0, limit) + "\n...(생략)" : contextParts;
+      const fullSystem = SYSTEM_PROMPT + truncated;
+
+      for (const modelName of chatModels) {
+        try {
+          response = await groqClient.chat.completions.create({
+            model: modelName,
+            messages: [{ role: "system", content: fullSystem }, ...chatMessages],
+            max_tokens: 1024,
+          });
+          break outer;
+        } catch (e: unknown) {
+          const status = (e as { status?: number }).status;
+          if (status === 413) {
+            // 컨텍스트가 너무 크면 다음 limit으로
+            break;
+          }
+          if (status === 404 || status === 400) {
+            console.warn(`Groq model ${modelName} unavailable (${status}), trying next...`);
+            continue;
+          }
+          throw e;
         }
-        throw e;
       }
     }
     if (!response) throw new Error("사용 가능한 Groq 모델이 없습니다.");
