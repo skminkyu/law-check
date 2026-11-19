@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "llama3-70b-8192",
         max_tokens,
         messages: [{ role: "user", content: prompt }],
       }),
