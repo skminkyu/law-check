@@ -9,6 +9,35 @@ import { searchFaq, formatFaqContext } from "@/lib/faqSearch";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
+// 사용 가능한 모델을 순서대로 시도 (최신 → 안정)
+const GEMINI_MODELS = [
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-1.5-flash-latest",
+  "gemini-1.5-flash-002",
+];
+
+async function generateWithFallback(systemInstruction: string, history: {role: string; parts: {text: string}[]}[], message: string): Promise<string> {
+  for (const modelName of GEMINI_MODELS) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName, systemInstruction });
+      const chat = model.startChat({ history });
+      const result = await chat.sendMessage(message);
+      return result.response.text();
+    } catch (e: unknown) {
+      const status = (e as {status?: number}).status;
+      // 404(모델 없음) 또는 503(과부하)이면 다음 모델 시도
+      if (status === 404 || status === 503) {
+        console.warn(`Model ${modelName} unavailable (${status}), trying next...`);
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error("모든 Gemini 모델을 사용할 수 없습니다.");
+}
+
 const SYSTEM_PROMPT = `당신은 SK스토아 품질관리팀(QA)의 법규 자문 챗봇입니다.
 다음 세 가지 지식을 활용해 답변합니다:
 1. SK스토아 QA 가이드북 내용 (서류QA 기준, 표시 기준, QA 업무 절차 등)
@@ -79,24 +108,16 @@ export async function POST(req: NextRequest) {
 
     const fullSystem = SYSTEM_PROMPT + contextNote + dispositionContext + broadcastContext + qaKnowledge + faqContext + lawContext;
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      systemInstruction: fullSystem,
-    });
-
     // Gemini는 user/model 역할 사용, 반드시 user로 시작해야 함
     const allMessages = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     }));
-    // 첫 메시지가 model이면 제거 (Gemini 제약)
     while (allMessages.length > 0 && allMessages[0].role === "model") {
       allMessages.shift();
     }
 
-    const chat = model.startChat({ history: allMessages });
-    const result = await chat.sendMessage(lastMessage);
-    const assistantMessage = result.response.text();
+    const assistantMessage = await generateWithFallback(fullSystem, allMessages, lastMessage);
 
     return NextResponse.json({ message: assistantMessage, category, categoryLabel });
   } catch (error) {
