@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { classifyCategory, CATEGORY_LABELS, ENFORCEMENT_DECREE_MAP, LawCategory } from "@/lib/classifier";
 import { searchLaw, getLawTextByName } from "@/lib/lawApi";
 import { getRelevantKnowledge } from "@/lib/qaKnowledge";
@@ -7,7 +7,7 @@ import { getDispositionData } from "@/lib/dispositionData";
 import { getBroadcastCaseSummary } from "@/lib/broadcastCasesData";
 import { searchFaq, formatFaqContext } from "@/lib/faqSearch";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 const SYSTEM_PROMPT = `당신은 SK스토아 품질관리팀(QA)의 법규 자문 챗봇입니다.
 다음 세 가지 지식을 활용해 답변합니다:
@@ -79,17 +79,20 @@ export async function POST(req: NextRequest) {
 
     const fullSystem = SYSTEM_PROMPT + contextNote + dispositionContext + broadcastContext + qaKnowledge + faqContext + lawContext;
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2048,
-      system: fullSystem,
-      messages: messages.map((m: { role: string; content: string }) => ({
-        role: m.role,
-        content: m.content,
-      })),
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: fullSystem,
     });
 
-    const assistantMessage = response.content[0].type === "text" ? response.content[0].text : "";
+    // Gemini는 user/model 역할 사용 (assistant → model)
+    const history = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
+
+    const chat = model.startChat({ history });
+    const result = await chat.sendMessage(lastMessage);
+    const assistantMessage = result.response.text();
 
     return NextResponse.json({ message: assistantMessage, category, categoryLabel });
   } catch (error) {
