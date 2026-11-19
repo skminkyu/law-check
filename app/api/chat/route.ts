@@ -93,9 +93,11 @@ export async function POST(req: NextRequest) {
 
     if (chatModels.length === 0) throw new Error("사용 가능한 Groq 채팅 모델이 없습니다.");
 
-    // 컨텍스트를 점진적으로 줄이면서 시도
-    const contextParts = contextNote + dispositionContext + broadcastContext + qaKnowledge + faqContext;
-    const contextLimits = [3000, 1500, 500];
+    // 컨텍스트를 우선순위별로 조합 (법령 조문 → 행정처분 → QA가이드 → FAQ)
+    // lawContext는 별도 추가 (토큰 절약을 위해 2000자 제한)
+    const lawContextTruncated = lawContext.length > 2000 ? lawContext.substring(0, 2000) + "\n...(생략)" : lawContext;
+    const contextParts = contextNote + lawContextTruncated + dispositionContext + broadcastContext + qaKnowledge + faqContext;
+    const contextLimits = [5000, 3000, 1500, 500];
 
     let response = null;
     outer: for (const limit of contextLimits) {
