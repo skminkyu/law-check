@@ -84,13 +84,17 @@ export async function POST(req: NextRequest) {
       systemInstruction: fullSystem,
     });
 
-    // Gemini는 user/model 역할 사용 (assistant → model)
-    const history = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
+    // Gemini는 user/model 역할 사용, 반드시 user로 시작해야 함
+    const allMessages = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     }));
+    // 첫 메시지가 model이면 제거 (Gemini 제약)
+    while (allMessages.length > 0 && allMessages[0].role === "model") {
+      allMessages.shift();
+    }
 
-    const chat = model.startChat({ history });
+    const chat = model.startChat({ history: allMessages });
     const result = await chat.sendMessage(lastMessage);
     const assistantMessage = result.response.text();
 
