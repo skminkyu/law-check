@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     const fullSystem = SYSTEM_PROMPT + contextNote + dispositionContext + broadcastContext + qaKnowledge + faqContext + lawContext;
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.8-flash",
       systemInstruction: fullSystem,
     });
 
