@@ -84,19 +84,21 @@ export async function POST(req: NextRequest) {
       content: m.content,
     }));
 
-    const GROQ_MODELS = [
-      "llama3-70b-8192",
-      "llama3-8b-8192",
-      "llama-3.1-70b-versatile",
-      "llama-3.1-8b-instant",
-      "mixtral-8x7b-32768",
-      "gemma2-9b-it",
-    ];
+    // 런타임에 사용 가능한 모델 목록 조회 후 첫 번째 chat 가능 모델 사용
+    const groqClient = getGroq();
+    const modelList = await groqClient.models.list();
+    const availableModels = modelList.data
+      .filter((m: { id: string }) =>
+        m.id.includes("llama") || m.id.includes("mixtral") || m.id.includes("gemma") || m.id.includes("deepseek") || m.id.includes("qwen")
+      )
+      .map((m: { id: string }) => m.id);
+
+    if (availableModels.length === 0) throw new Error("사용 가능한 Groq 모델이 없습니다.");
 
     let response = null;
-    for (const modelName of GROQ_MODELS) {
+    for (const modelName of availableModels) {
       try {
-        response = await getGroq().chat.completions.create({
+        response = await groqClient.chat.completions.create({
           model: modelName,
           messages: [
             { role: "system", content: fullSystem },
@@ -107,8 +109,8 @@ export async function POST(req: NextRequest) {
         break;
       } catch (e: unknown) {
         const status = (e as { status?: number }).status;
-        if (status === 404) {
-          console.warn(`Groq model ${modelName} not found, trying next...`);
+        if (status === 404 || status === 400) {
+          console.warn(`Groq model ${modelName} unavailable, trying next...`);
           continue;
         }
         throw e;
